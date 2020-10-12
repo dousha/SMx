@@ -1,4 +1,5 @@
 #include "sm3.h"
+#include "common.h"
 
 #include <stdbool.h>
 #ifdef DEBUG
@@ -39,48 +40,32 @@ void sm3_init() {
     reg[7] = 0xb0fb0e4e;
 }
 
-uint32_t t(uint8_t j) {
+uint32_t sm3_t(uint8_t j) {
     return j < 16 ? 0x79cc4519 : 0x7a879d8a;
 }
 
-uint32_t ff(uint32_t x, uint32_t y, uint32_t z, uint8_t j) {
+uint32_t sm3_ff(uint32_t x, uint32_t y, uint32_t z, uint8_t j) {
     return j < 16 ? x ^ y ^ z : (x & y) | (x & z) | (y & z);
 }
 
-uint32_t gg(uint32_t x, uint32_t y, uint32_t z, uint8_t j) {
+uint32_t sm3_gg(uint32_t x, uint32_t y, uint32_t z, uint8_t j) {
     return j < 16 ? x ^ y ^ z : (x & y) | ((~x) & z);
 }
 
-uint32_t rol(uint32_t x, uint32_t r) {
-    bool carry = false;
-    uint32_t out = x;
-    for (uint32_t i = 0; i < r; i++) {
-        if (out & 0x80000000) {
-            carry = true;
-        }
-        out <<= 1;
-        if (carry) {
-            carry = false;
-            out |= 1;
-        }
-    }
-    return out;
-}
-
-uint32_t p0(uint32_t x) {
+uint32_t sm3_p0(uint32_t x) {
     return x ^ rol(x, 9) ^ rol(x, 17);
 }
 
-uint32_t p1(uint32_t x) {
+uint32_t sm3_p1(uint32_t x) {
     return x ^ rol(x, 15) ^ rol(x, 23);
 }
 
-void pad(uint32_t *ws) {
+void sm3_pad(uint32_t *ws) {
     for (uint8_t i = 0; i < 16; i++) {
         w[i] = ws[i];
     }
     for (uint8_t i = 16; i < 68; i++) {
-        w[i] = p1(w[i - 16] ^ w[i - 9] ^ rol(w[i - 3], 15)) ^ rol(w[i - 13], 7) ^ w[i - 6];
+        w[i] = sm3_p1(w[i - 16] ^ w[i - 9] ^ rol(w[i - 3], 15)) ^ rol(w[i - 13], 7) ^ w[i - 6];
     }
     for (uint8_t i = 0; i < 64; i++) {
         w_prime[i] = w[i] ^ w[i + 4];
@@ -91,16 +76,16 @@ void pad(uint32_t *ws) {
  * @param [in, out] v registers
  * @param [in] b 512bit (64bytes)
  */
-void cf(uint32_t *v, uint32_t *b) {
+void sm3_cf(uint32_t *v, uint32_t *b) {
     uint32_t ss1, ss2, tt1, tt2;
     for (uint8_t i = 0; i < 8; i++) {
         next_reg[i] = v[i];
     }
     for (uint8_t j = 0; j < 64; j++) {
-        ss1 = rol(rol(next_reg[0], 12) + next_reg[4] + rol(t(j), j), 7);
+        ss1 = rol(rol(next_reg[0], 12) + next_reg[4] + rol(sm3_t(j), j), 7);
         ss2 = ss1 ^ rol(next_reg[0], 12);
-        tt1 = ff(next_reg[0], next_reg[1], next_reg[2], j) + next_reg[3] + ss2 + w_prime[j];
-        tt2 = gg(next_reg[4], next_reg[5], next_reg[6], j) + next_reg[7] + ss1 + w[j];
+        tt1 = sm3_ff(next_reg[0], next_reg[1], next_reg[2], j) + next_reg[3] + ss2 + w_prime[j];
+        tt2 = sm3_gg(next_reg[4], next_reg[5], next_reg[6], j) + next_reg[7] + ss1 + w[j];
         next_reg[3] = next_reg[2];
         next_reg[2] = rol(next_reg[1], 9);
         next_reg[1] = next_reg[0];
@@ -108,7 +93,7 @@ void cf(uint32_t *v, uint32_t *b) {
         next_reg[7] = next_reg[6];
         next_reg[6] = rol(next_reg[5], 19);
         next_reg[5] = next_reg[4];
-        next_reg[4] = p0(tt2);
+        next_reg[4] = sm3_p0(tt2);
         #ifdef DEBUG
         printf("%2d ", j);
         print_digest(next_reg);
@@ -120,17 +105,17 @@ void cf(uint32_t *v, uint32_t *b) {
 }
 
 void sm3_process_buffer() {
-    pad(buf);
+    sm3_pad(buf);
     #ifdef DEBUG
     printf("w:\n");
     print_w();
     printf("w':\n");
     print_w_prime();
     #endif
-    cf(reg, buf);
+    sm3_cf(reg, buf);
 }
 
-uint8_t get_padded_byte(const uint8_t *bytes, uint64_t length, uint64_t actualLength, uint64_t offset) {
+uint8_t sm3_get_padded_byte(const uint8_t *bytes, uint64_t length, uint64_t actualLength, uint64_t offset) {
     if (offset < length / 8) {
         return bytes[offset];
     } else {
@@ -175,10 +160,10 @@ uint32_t* sm3_digest(const uint8_t *bytes, uint64_t length) {
         #endif
         uint8_t *needle = (uint8_t *) buf;
         for (int i = 0; i < 16; i++) {
-            needle[4 * i + 3] = get_padded_byte(bytes, length, actualByteStreamLength, offset);
-            needle[4 * i + 2] = get_padded_byte(bytes, length, actualByteStreamLength, offset + 1);
-            needle[4 * i + 1] = get_padded_byte(bytes, length, actualByteStreamLength, offset + 2);
-            needle[4 * i + 0] = get_padded_byte(bytes, length, actualByteStreamLength, offset + 3);
+            needle[4 * i + 3] = sm3_get_padded_byte(bytes, length, actualByteStreamLength, offset);
+            needle[4 * i + 2] = sm3_get_padded_byte(bytes, length, actualByteStreamLength, offset + 1);
+            needle[4 * i + 1] = sm3_get_padded_byte(bytes, length, actualByteStreamLength, offset + 2);
+            needle[4 * i + 0] = sm3_get_padded_byte(bytes, length, actualByteStreamLength, offset + 3);
             offset += 4;
         }
         sm3_process_buffer();

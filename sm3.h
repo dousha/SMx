@@ -3,8 +3,6 @@
 
 #include <stdint.h>
 
-extern void sm3_init();
-
 extern uint32_t* sm3_digest(const uint8_t *, uint64_t);
 
 #endif
