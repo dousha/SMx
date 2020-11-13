@@ -53,6 +53,10 @@ int main() {
 	// FIXME: CBC needs proper padding of message
 	sm4_text_cbc_decrypt_buffer[len] = 0;
 	printf("%s\n", sm4_text_cbc_decrypt_buffer);
+	uint8_t sm4_text_cfb_out_buffer[64] = {0}, sm4_text_cfb_decrypt_buffer[64] = {0};
+	sm4_encrypt_cfb(sm4_text_msg, len, sm4_key, sm4_msg, sm4_text_cfb_out_buffer);
+	sm4_decrypt_cfb(sm4_text_cfb_out_buffer, 64, sm4_key, sm4_msg, sm4_text_cfb_decrypt_buffer);
+	printf("%s\n", sm4_text_cfb_decrypt_buffer);
 	return 0;
 }
 
