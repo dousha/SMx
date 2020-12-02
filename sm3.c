@@ -1,7 +1,7 @@
 #include "sm3.h"
 #include "common.h"
 
-#include <stdbool.h>
+#include <string.h>
 #ifdef DEBUG
 #include <stdio.h>
 extern void print_digest(uint32_t *digest);
@@ -38,6 +38,9 @@ void sm3_init() {
     reg[5] = 0x163138aa;
     reg[6] = 0xe38dee4d;
     reg[7] = 0xb0fb0e4e;
+    memset(next_reg, 0, 32);
+    memset(w, 0, 4 * 68);
+    memset(w_prime, 0, 4 * 64);
 }
 
 uint32_t sm3_t(uint8_t j) {
@@ -60,12 +63,12 @@ uint32_t sm3_p1(uint32_t x) {
     return x ^ rol(x, 15) ^ rol(x, 23);
 }
 
-void sm3_pad(uint32_t *ws) {
+void sm3_pad(const uint32_t *ws) {
     for (uint8_t i = 0; i < 16; i++) {
         w[i] = ws[i];
     }
-    for (uint8_t i = 16; i < 68; i++) {
-        w[i] = sm3_p1(w[i - 16] ^ w[i - 9] ^ rol(w[i - 3], 15)) ^ rol(w[i - 13], 7) ^ w[i - 6];
+		for (uint8_t i = 16; i < 68; i++) {
+			w[i] = sm3_p1(w[i - 16] ^ w[i - 9] ^ rol(w[i - 3], 15)) ^ rol(w[i - 13], 7) ^ w[i - 6];
     }
     for (uint8_t i = 0; i < 64; i++) {
         w_prime[i] = w[i] ^ w[i + 4];
@@ -115,59 +118,64 @@ void sm3_process_buffer() {
     sm3_cf(reg, buf);
 }
 
-uint8_t sm3_get_padded_byte(const uint8_t *bytes, uint64_t length, uint64_t actualLength, uint64_t offset) {
-    if (offset < length / 8) {
-        return bytes[offset];
-    } else {
-        if (offset == length / 8) {
-            return 0x80;
-        } else {
-            if (actualLength - offset <= 4) {
-                switch (actualLength - offset) {
-                    case 4:
-                        return (length & 0xff000000) >> 24;
-                    case 3:
-                        return (length & 0x00ff0000) >> 16;
-                    case 2:
-                        return (length & 0x0000ff00) >> 8;
-                    case 1:
-                        return (length & 0x000000ff);
-                    default:
-                        return 0;
-                }
-            } else {
-                return 0x00;
-            }
-        }
-    }
+inline uint64_t sm3_get_padded_byte_length(uint64_t bitLength) {
+	return ((bitLength + 512) / 512) * 64;
 }
 
-uint32_t* sm3_digest(const uint8_t *bytes, uint64_t length) {
+uint8_t sm3_get_relative_padded_byte(const uint8_t *bytes, uint64_t accumulatedByteLength, uint64_t bitLength, uint8_t relativeOffset) {
+	const uint64_t paddedByteLength = sm3_get_padded_byte_length(bitLength);
+	if (accumulatedByteLength + relativeOffset < bitLength / 8) {
+		return bytes[relativeOffset];
+	} else {
+		if (accumulatedByteLength + relativeOffset == bitLength / 8) {
+			return 0x80;
+		} else {
+			if (paddedByteLength - (accumulatedByteLength + relativeOffset) <= 4) {
+				switch (paddedByteLength - (accumulatedByteLength + relativeOffset)) {
+					case 4:
+						return (bitLength & 0xff000000u) >> 24u;
+					case 3:
+						return (bitLength & 0x00ff0000u) >> 16u;
+					case 2:
+						return (bitLength & 0x0000ff00u) >> 8u;
+					case 1:
+						return (bitLength & 0x000000ffu);
+					default:
+						return 0;
+				}
+			} else {
+				return 0x00;
+			}
+		}
+	}
+}
+
+void sm3_update(const uint8_t *bytes, uint64_t accumulatedByteLength, uint64_t bitLength) {
+	uint8_t *needle = (uint8_t *) buf;
+	uint8_t offset = 0;
+	for (uint8_t i = 0; i < 16; i++) {
+		needle[4 * i + 3] = sm3_get_relative_padded_byte(bytes, accumulatedByteLength, bitLength, offset);
+		needle[4 * i + 2] = sm3_get_relative_padded_byte(bytes, accumulatedByteLength, bitLength, offset + 1);
+		needle[4 * i + 1] = sm3_get_relative_padded_byte(bytes, accumulatedByteLength, bitLength, offset + 2);
+		needle[4 * i + 0] = sm3_get_relative_padded_byte(bytes, accumulatedByteLength, bitLength, offset + 3);
+		offset += 4;
+	}
+	sm3_process_buffer();
+}
+
+uint32_t* sm3_finalize() {
+	return reg;
+}
+
+uint32_t* sm3_digest(const uint8_t *bytes, uint64_t bitLength) {
     // padding of the message
-    const uint64_t actualBlockLength = (length + 512) / 512;
-    const uint64_t actualByteStreamLength = actualBlockLength * 64;
+    const uint64_t targetByteLength = sm3_get_padded_byte_length(bitLength);
+    uint64_t accumulatedByteLength = 0;
+    uint8_t *probe = (uint8_t *) bytes;
     sm3_init();
-
-    #ifdef DEBUG
-    printf("Block size: %d, Actual byte stream length is %d\n", actualBlockLength, actualByteStreamLength);
-    #endif
-
-    uint64_t offset = 0;
-    while (offset < actualByteStreamLength) {
-        // copy bytes to buffer in the big endian manner
-        #ifdef DEBUG
-        printf("Processing block @ offset %d\n", offset);
-        #endif
-        uint8_t *needle = (uint8_t *) buf;
-        for (int i = 0; i < 16; i++) {
-            needle[4 * i + 3] = sm3_get_padded_byte(bytes, length, actualByteStreamLength, offset);
-            needle[4 * i + 2] = sm3_get_padded_byte(bytes, length, actualByteStreamLength, offset + 1);
-            needle[4 * i + 1] = sm3_get_padded_byte(bytes, length, actualByteStreamLength, offset + 2);
-            needle[4 * i + 0] = sm3_get_padded_byte(bytes, length, actualByteStreamLength, offset + 3);
-            offset += 4;
-        }
-        sm3_process_buffer();
+    while (accumulatedByteLength < targetByteLength) {
+		sm3_update(probe + accumulatedByteLength, accumulatedByteLength, bitLength);
+		accumulatedByteLength += 64;
     }
-
-    return reg;
+    return sm3_finalize();
 }

@@ -118,7 +118,7 @@ void sm4_populate_rk_table(const uint32_t key[4]) {
 	for (uint8_t i = 0; i < 32; i++) {
 		sm4_rk[i] = sm4_get_round_key(k, i);
 #ifdef DEBUG
-		printf("rk[%02d] = %08x\n", i, rk[i]);
+		printf("rk[%02d] = %08x\n", i, sm4_rk[i]);
 #endif
 	}
 	rk_generated = 1;

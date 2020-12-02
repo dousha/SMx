@@ -18,6 +18,6 @@ uint32_t rol(uint32_t x, uint32_t r) {
 }*/
 
 uint32_t rol(uint32_t x, uint32_t r) {
-	return (x << r) ^ (x >> (32u - r));
+	return (x << r) | (x >> (32u - r));
 }
 
