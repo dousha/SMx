@@ -15,7 +15,7 @@ extern void bigint_from_bytes(bigint *value, const uint8_t *data, size_t len);
 
 extern void bigint_to_bytes(bigint *, uint8_t *);
 
-extern void bigint_copy(bigint *, bigint *);
+extern void bigint_copy(bigint *, const bigint *);
 
 extern void bigint_from_value(bigint *, uint64_t);
 
@@ -59,9 +59,9 @@ extern uint8_t bigint_is_negative(bigint *);
 
 extern uint8_t bigint_excerpt_is_zero(bigint *, size_t);
 
-extern uint8_t bigint_test_bit(bigint *, size_t);
+extern uint8_t bigint_test_bit(const bigint *, size_t);
 
-extern size_t bigint_most_significant_1(bigint *);
+extern size_t bigint_most_significant_1(const bigint *);
 
 extern uint8_t bigint_is_opposite(bigint *, bigint *);
 

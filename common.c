@@ -21,3 +21,9 @@ uint32_t rol(uint32_t x, uint32_t r) {
 	return (x << r) | (x >> (32u - r));
 }
 
+
+void copy_and_reverse_endianness(uint8_t *to, const uint8_t *from, uint64_t length) {
+	for (uint64_t i = 0; i < length; i++) {
+		to[i] = from[length - i - 1];
+	}
+}

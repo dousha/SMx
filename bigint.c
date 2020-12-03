@@ -20,7 +20,7 @@ void bigint_to_bytes(bigint *value, uint8_t *out) {
 	memcpy(out, value->mess, BIGINT_ACTUAL_SIZE);
 }
 
-void bigint_copy(bigint *to, bigint *from) {
+void bigint_copy(bigint *to, const bigint *from) {
 	memcpy(to->mess, from->mess, BIGINT_ACTUAL_SIZE);
 }
 
@@ -306,13 +306,13 @@ uint8_t bigint_excerpt_is_zero(bigint *v, size_t offset) {
 	return 1;
 }
 
-uint8_t bigint_test_bit(bigint *v, size_t offset) {
+uint8_t bigint_test_bit(const bigint *v, size_t offset) {
 	uint8_t byteOffset = offset / 8;
 	uint8_t bitRemaining = offset % 8;
 	return (v->mess[byteOffset] & (1u << bitRemaining)) > 0;
 }
 
-size_t bigint_most_significant_1(bigint *v) {
+size_t bigint_most_significant_1(const bigint *v) {
 	size_t out = 0;
 	for (uint8_t i = 0; i < BIGINT_ACTUAL_SIZE; i++) {
 		if (v->mess[i] > 0) {

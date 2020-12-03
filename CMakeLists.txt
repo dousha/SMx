@@ -10,4 +10,4 @@ add_executable(smxtest sm3.h sm4.h common.h test.c)
 target_link_libraries(smxtest PRIVATE smx)
 
 add_executable(bitest bigint.c bigint.h bitest.c)
-add_executable(ectest sm2.h sm2.c ectest.c bigint.h bigint.c)
+add_executable(ectest sm2.h sm2.c ectest.c bigint.h bigint.c common.c common.h)

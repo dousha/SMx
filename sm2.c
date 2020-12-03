@@ -1,6 +1,10 @@
 #include "sm2.h"
+#include "sm3.h"
+#include "common.h"
+#include <string.h>
 
 static bigint lambda, bufX, bufY, constant;
+static uint8_t buf[32];
 
 /**
  * $ x_3 = \lambda{}^{2} - x_1 - x_2 $
@@ -12,7 +16,7 @@ static bigint lambda, bufX, bufY, constant;
  * @param p P point, will be overwritten by P + Q
  * @param q Q point, will preserve
  */
-void ec_point_add(ec_system *sys, ec_point *p, ec_point *q) {
+void ec_point_add(const ec_system *sys, ec_point *p, const ec_point *q) {
 	if (p->is_infinity) {
 		if (q->is_infinity) {
 			return; // 0 + 0 = 0
@@ -68,11 +72,11 @@ void ec_point_inverse(ec_point *p) {
 	bigint_negate(p->y);
 }
 
-void ec_point_double(ec_system *sys, ec_point *p) {
+void ec_point_double(const ec_system *sys, ec_point *p) {
 	ec_point_add(sys, p, p);
 }
 
-void ec_point_scalar_multiply(ec_system *sys, ec_point *p, bigint *k) {
+void ec_point_scalar_multiply(const ec_system *sys, ec_point *p, const bigint *k) {
 	bigint x, y;
 	ec_point o;
 	o.is_infinity = 1;
@@ -92,4 +96,50 @@ void ec_point_scalar_multiply(ec_system *sys, ec_point *p, bigint *k) {
 	}
 	bigint_copy(p->x, &x);
 	bigint_copy(p->y, &y);
+}
+
+void sm2_keygen(const ec_system *sys, const bigint *d, ec_keypair *out) {
+	bigint_copy(out->secret, d);
+	bigint_copy(out->pubkey->x, sys->g->x);
+	bigint_copy(out->pubkey->y, sys->g->y);
+	ec_point_scalar_multiply(sys, out->pubkey, d);
+}
+
+uint32_t *sm2_identity_hash(const ec_system *sys, const ec_keypair *key, const uint8_t *id, uint16_t idBitLength) {
+	sm3_init();
+	// FIXME: not applicable if p is not 256bits long
+	// FIXME: sm3_update requires input of fixed 64 bytes long
+	uint64_t totalBitLength = idBitLength, accumulatedLength = 0;
+	totalBitLength *= 8; // convert to bit length
+	totalBitLength += 2 * 8; // 2byte id length length
+	totalBitLength += 6 * 32 * 8; // 6 parameters
+	copy_and_reverse_endianness(buf, (uint8_t *) &idBitLength, 2);
+	sm3_update(buf, accumulatedLength, totalBitLength);
+	accumulatedLength += 2;
+	sm3_update(id, accumulatedLength, totalBitLength);
+	accumulatedLength += idBitLength;
+	copy_and_reverse_endianness(buf, sys->a->mess, 32);
+	sm3_update(buf, accumulatedLength, totalBitLength);
+	accumulatedLength += 32;
+	copy_and_reverse_endianness(buf, sys->b->mess, 32);
+	sm3_update(buf, accumulatedLength, totalBitLength);
+	accumulatedLength += 32;
+	copy_and_reverse_endianness(buf, sys->g->x->mess, 32);
+	sm3_update(buf, accumulatedLength, totalBitLength);
+	accumulatedLength += 32;
+	copy_and_reverse_endianness(buf, sys->g->y->mess, 32);
+	sm3_update(buf, accumulatedLength, totalBitLength);
+	accumulatedLength += 32;
+	copy_and_reverse_endianness(buf, key->pubkey->x->mess, 32);
+	sm3_update(buf, accumulatedLength, totalBitLength);
+	accumulatedLength += 32;
+	copy_and_reverse_endianness(buf, key->pubkey->y->mess, 32);
+	sm3_update(buf, accumulatedLength, totalBitLength);
+	return sm3_finalize();
+}
+
+void sm2_sign(const ec_system *sys, const ec_keypair *key, const uint32_t *hash, const uint8_t *data, uint64_t length, uint8_t *out) {
+	sm3_init();
+	uint64_t totalBitLength = length * 8 + 32 * 8;
+	// TODO
 }
