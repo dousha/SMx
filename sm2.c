@@ -60,6 +60,8 @@ void ec_point_add(ec_system *sys, ec_point *p, ec_point *q) {
 	bigint_multiply_mod(&bufX, &lambda, sys->p);
 	bigint_subtract(&bufX, p->y);
 	bigint_copy(p->y, &bufX); // y_3 calculated
+	bigint_mod(p->x, sys->p);
+	bigint_mod(p->y, sys->p); // bring things back
 }
 
 void ec_point_inverse(ec_point *p) {

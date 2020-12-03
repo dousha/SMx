@@ -3,7 +3,7 @@
 
 ec_system system;
 ec_point P, Q;
-bigint p, a, b, px, py, qx, qy;
+bigint p, a, b, px, py, qx, qy, t;
 
 void print_point(ec_point *point) {
 	if (point->is_infinity) {
@@ -52,5 +52,12 @@ int main() {
 	bigint_from_value(&py, 2);
 	ec_point_double(&system, &P);
 	print_point(&P);
+	ec_point_double(&system, &P);
+	bigint_from_value(&qx, 10);
+	bigint_from_value(&qy, 2);
+	bigint_from_value(&t, 4);
+	ec_point_scalar_multiply(&system, &Q, &t);
+	print_point(&P);
+	print_point(&Q);
 	return 0;
 }
