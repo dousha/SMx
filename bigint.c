@@ -241,6 +241,9 @@ uint8_t bigint_is_negative(bigint *v) {
 }
 
 int8_t bigint_compare(bigint *a, bigint *b) {
+	if (a == b) {
+		return 0;
+	}
 	uint8_t signOfA = bigint_is_negative(a);
 	uint8_t signOfB = bigint_is_negative(b);
 	if (signOfA != signOfB) {
@@ -309,13 +312,13 @@ uint8_t bigint_test_bit(bigint *v, size_t offset) {
 	return (v->mess[byteOffset] & (1u << bitRemaining)) > 0;
 }
 
-uint8_t bigint_most_significant_1(bigint *v) {
-	uint8_t out = 0;
+size_t bigint_most_significant_1(bigint *v) {
+	size_t out = 0;
 	for (uint8_t i = 0; i < BIGINT_ACTUAL_SIZE; i++) {
 		if (v->mess[i] > 0) {
 			for (uint8_t j = 0; j < 8; j++) {
 				if (((v->mess[i]) & (1u << j)) > 0) {
-					out = i * 8 + j;
+					out = ((size_t) i) * 8 + j;
 				}
 			}
 		}
@@ -372,4 +375,28 @@ void bigint_divide_mod_prime(bigint *a, bigint *b, bigint *m) {
 	bigint_subtract_u8(&buf2, 2);
 	bigint_power_mod(&buf, &buf2, m); // buf is the inverse of b
 	bigint_multiply_mod(a, &buf, m);
+}
+
+uint8_t bigint_is_opposite(bigint *a, bigint *b) {
+	if (a == b) {
+		return 0;
+	}
+	uint8_t out;
+	bigint_negate(a);
+	out = bigint_compare(a, b);
+	bigint_negate(a);
+	if (out == 0) {
+		out = 1;
+	}
+	return out;
+}
+
+uint8_t bigint_double(bigint *v) {
+	uint8_t carry = 0;
+	for (uint8_t i = 0; i < BIGINT_ACTUAL_SIZE; i++) {
+		carry = (v->mess[i] & 0x80u) > 0 ? 1 : 0;
+		v->mess[i] <<= 1u;
+		v->mess[i] |= carry;
+	}
+	return carry;
 }
