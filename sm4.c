@@ -125,7 +125,7 @@ void sm4_populate_rk_table(const uint32_t key[4]) {
 }
 
 void
-sm4_encrypt_block_ecb(const uint8_t data[16], const uint64_t actualLength, const uint32_t key[4], uint8_t *output) {
+sm4_encrypt_block_ecb(const uint8_t data[16], uint64_t actualLength, const uint32_t key[4], uint8_t *output) {
 	uint32_t next, cipher[4];
 	sm4_populate_rk_table(key);
 	for (uint8_t i = 0; i < 4; i++) {
@@ -144,7 +144,7 @@ sm4_encrypt_block_ecb(const uint8_t data[16], const uint64_t actualLength, const
 }
 
 void
-sm4_decrypt_block_ecb(const uint8_t data[16], const uint64_t actualLength, const uint32_t key[4], uint8_t *output) {
+sm4_decrypt_block_ecb(const uint8_t data[16], uint64_t actualLength, const uint32_t key[4], uint8_t *output) {
 	uint32_t next, cipher[4];
 	sm4_populate_rk_table(key);
 	for (uint8_t i = 0; i < 4; i++) {

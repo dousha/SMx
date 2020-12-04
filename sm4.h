@@ -15,4 +15,8 @@ extern void sm4_encrypt_cfb(const uint8_t *, uint64_t, const uint32_t *, const u
 
 extern void sm4_decrypt_cfb(const uint8_t *, uint64_t, const uint32_t *, const uint8_t *, uint8_t *);
 
+extern void sm4_encrypt_block_ecb(const uint8_t[16], uint64_t, const uint32_t[4], uint8_t *);
+
+extern void sm4_decrypt_block_ecb(const uint8_t[16], uint64_t, const uint32_t[4], uint8_t *);
+
 #endif
