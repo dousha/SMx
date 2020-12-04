@@ -16,8 +16,21 @@ void bigint_from_bytes(bigint *value, const uint8_t *data, size_t len) {
 	memcpy(value->mess, data, len);
 }
 
+void bigint_from_big_endian_bytes(bigint *out, const uint8_t *data, size_t len) {
+	memset(out->mess, 0, BIGINT_ACTUAL_SIZE);
+	for (size_t i = 0; i < len; i++) {
+		out->mess[i] = data[len - i - 1];
+	}
+}
+
 void bigint_to_bytes(bigint *value, uint8_t *out) {
 	memcpy(out, value->mess, BIGINT_ACTUAL_SIZE);
+}
+
+void bigint_to_big_endian_bytes(const bigint *value, uint8_t *out) {
+	for (uint8_t i = 0; i < BIGINT_ACTUAL_SIZE; i++) {
+		out[i] = value->mess[BIGINT_ACTUAL_SIZE - i - 1];
+	}
 }
 
 void bigint_copy(bigint *to, const bigint *from) {
@@ -38,7 +51,7 @@ void bigint_from_value(bigint *value, uint64_t number) {
 	}
 }
 
-uint8_t bigint_add(bigint *a, bigint *b) {
+uint8_t bigint_add(bigint *a, const bigint *b) {
 	uint16_t t;
 	uint8_t carry = 0;
 	for (uint8_t i = 0; i < BIGINT_ACTUAL_SIZE; i++) {
@@ -134,6 +147,7 @@ void bigint_add_mod(bigint *a, bigint *b, bigint *m) {
 }
 
 void bigint_mod(bigint *v, bigint *m) {
+	bigint buf, guess, lowerBound, higherBound;
 	if (bigint_is_zero(m)) {
 		return;
 	}
@@ -141,20 +155,58 @@ void bigint_mod(bigint *v, bigint *m) {
 		bigint_init(v);
 		return;
 	}
-	int8_t compare = bigint_unsigned_compare(v, m);
+	uint8_t sign = bigint_is_negative(v);
+	if (sign) {
+		bigint_negate(v);
+	}
+	int8_t compare = bigint_compare(v, m);
 	if (compare < 0) {
+		if (sign) {
+			bigint_negate(v);
+			bigint_add(v, m);
+		}
 		return;
 	} else if (compare == 0) {
 		bigint_init(v);
 	} else {
-		uint8_t sign = bigint_is_negative(v);
-		if (sign) {
-			bigint_negate(v);
+		bigint_from_value(&lowerBound, 0);
+		bigint_copy(&higherBound, m);
+		bigint_copy(&buf, m);
+		bigint_copy(&guess, &buf);
+		bigint_multiply(&guess, m);
+		compare = bigint_unsigned_compare(&guess, v);
+		if (compare < 0) {
+			// v is too large
+			bigint_subtract(v, &guess);
+		} else if (compare == 0) {
+			// v is m^2
+			bigint_init(v);
+			return;
 		}
-		// FIXME: need better performance here
-		while(bigint_compare(v, m) > 0) {
-			bigint_subtract(v, m);
-		}
+		bigint_shift_right(&buf);
+		do {
+			bigint_copy(&guess, &buf);
+			bigint_multiply(&guess, m);
+			compare = bigint_compare(&guess, v);
+			if (compare > 0) {
+				// buf * m > v
+				bigint_copy(&higherBound, &buf);
+				bigint_copy(&buf, &lowerBound);
+				bigint_average(&buf, &higherBound);
+			} else if (compare < 0) {
+				// buf * m < v
+				bigint_copy(&lowerBound, &buf);
+				bigint_average(&buf, &higherBound);
+			} else {
+				// v is a multiplication of m
+				bigint_init(v);
+				return;
+			}
+		} while (!bigint_difference_by_1(&higherBound, &lowerBound));
+		// select lower bound as division result
+		bigint_copy(&buf, &lowerBound);
+		bigint_multiply(&buf, m);
+		bigint_subtract(v, &buf);
 		if (sign) {
 			bigint_negate(v);
 			bigint_add(v, m);
@@ -186,7 +238,7 @@ void bigint_power_mod(bigint *g, bigint *b, bigint *m) {
 	}
 	bigint_mod(g, m);
 	bigint_from_value(&buf, 1);
-	uint8_t offset = 0;
+	uint16_t offset = 0;
 	while (!bigint_excerpt_is_zero(b, offset)) {
 		if (bigint_test_bit(b, offset)) {
 			bigint_multiply(&buf, g);
@@ -281,7 +333,7 @@ uint8_t bigint_is_one(bigint *v) {
 	if (v->mess[0] != 1) {
 		return 0;
 	}
-	for (uint8_t i = 0; i < BIGINT_ACTUAL_SIZE; i++) {
+	for (uint8_t i = 1; i < BIGINT_ACTUAL_SIZE; i++) {
 		if (v->mess[i] != 0) {
 			return 0;
 		}
@@ -324,6 +376,20 @@ size_t bigint_most_significant_1(const bigint *v) {
 		}
 	}
 	return out;
+}
+
+uint8_t bigint_difference_by_1(bigint *u, bigint *v) {
+	uint8_t result = 0;
+	if (bigint_compare(u, v) > 0) {
+		bigint_subtract(u, v);
+		result = bigint_is_one(u);
+		bigint_add(u, v);
+	} else {
+		bigint_subtract(v, u);
+		result = bigint_is_one(v);
+		bigint_add(v, u);
+	}
+	return result;
 }
 
 void bigint_square(bigint *v) {
@@ -392,11 +458,45 @@ uint8_t bigint_is_opposite(bigint *a, bigint *b) {
 }
 
 uint8_t bigint_double(bigint *v) {
+	return bigint_shift_right(v);
+}
+
+uint8_t bigint_shift_left(bigint *v) {
 	uint8_t carry = 0;
 	for (uint8_t i = 0; i < BIGINT_ACTUAL_SIZE; i++) {
-		carry = (v->mess[i] & 0x80u) > 0 ? 1 : 0;
-		v->mess[i] <<= 1u;
-		v->mess[i] |= carry;
+		if (carry) {
+			carry = (v->mess[i] & 0x80u) > 0 ? 1 : 0;
+			v->mess[i] <<= 1u;
+			v->mess[i] |= 1u;
+		} else {
+			carry = (v->mess[i] & 0x80u) > 0 ? 1 : 0;
+			v->mess[i] <<= 1u;
+		}
 	}
 	return carry;
+}
+
+uint8_t bigint_shift_right(bigint *v) {
+	uint8_t carry = 0;
+	for (uint8_t i = 0; i < BIGINT_ACTUAL_SIZE; i++) {
+		if (carry) {
+			carry = (v->mess[BIGINT_ACTUAL_SIZE - i - 1] & 1u);
+			v->mess[BIGINT_ACTUAL_SIZE - i - 1] >>= 1u;
+			v->mess[BIGINT_ACTUAL_SIZE - i - 1] |= 0x80u;
+		} else {
+			carry = (v->mess[BIGINT_ACTUAL_SIZE - i - 1] & 1u);
+			v->mess[BIGINT_ACTUAL_SIZE - i - 1] >>= 1u;
+		}
+	}
+	return carry;
+}
+
+void bigint_average(bigint *a, const bigint *b) {
+	bigint_add(a, b);
+	bigint_shift_right(a);
+}
+
+void bigint_center(bigint *out, const bigint *left, const bigint *right) {
+	bigint_copy(out, left);
+	bigint_average(out, right);
 }

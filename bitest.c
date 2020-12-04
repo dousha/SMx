@@ -45,5 +45,10 @@ int main() {
 	bigint_from_value(&b, -2);
 	bigint_divide_mod_prime(&a, &b, &m);
 	print_bigint(&a); // (4 / (-2)) % 19 = -2 % 19 = 17 = 0x11
+	bigint_from_value(&a, 0x55555555);
+	bigint_shift_left(&a);
+	print_bigint(&a); // 0xaaaaaaaa
+	bigint_shift_right(&a);
+	print_bigint(&a); // 0x55555555
 	return 0;
 }
