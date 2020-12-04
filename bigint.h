@@ -2,6 +2,7 @@
 #define BIGINT_H
 
 #include <stdint.h>
+#include <stddef.h>
 
 #define BIGINT_ACTUAL_SIZE 64
 
