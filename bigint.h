@@ -80,4 +80,14 @@ extern void bigint_square(bigint *);
 
 extern void bigint_average(bigint *, const bigint *);
 
+extern void bigint_shift_right_256(bigint *);
+
+extern void bigint_mod_accelerated(bigint *, bigint *, bigint *);
+
+extern void bigint_multiply_mod_accelerated(bigint *, bigint *, bigint *, bigint *);
+
+extern void bigint_power_mod_accelerated(bigint *, bigint *, bigint *, bigint *);
+
+extern void bigint_divide_mod_prime_accelerated(bigint *, bigint *, bigint *, bigint *);
+
 #endif

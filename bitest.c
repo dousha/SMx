@@ -3,6 +3,26 @@
 
 const uint8_t aValue[4] = {0x12, 0x34, 0x56, 0x78};
 const uint8_t bValue[4] = {0x78, 0x56, 0x34, 0x12};
+const uint8_t m256x[32] = {
+		0x01, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+		0xff, 0xff, 0xff, 0xff,
+		0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+		0x01, 0x00, 0x00, 0x00,
+};
+const uint8_t prime[32] = {
+		0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff,
+		0x00, 0x00, 0x00, 0x00,
+		0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff,
+		0xff, 0xff, 0xff, 0xff,
+		0xfe, 0xff, 0xff, 0xff
+};
 
 void print_bigint(bigint *v) {
 	printf("0x");
@@ -16,7 +36,7 @@ void print_bigint(bigint *v) {
 }
 
 int main() {
-	bigint a, b, m;
+	bigint a, b, m, m256;
 	bigint_from_value(&a, 0xff);
 	print_bigint(&a);
 	bigint_from_value(&b, 0xff);
@@ -50,5 +70,33 @@ int main() {
 	print_bigint(&a); // 0xaaaaaaaa
 	bigint_shift_right(&a);
 	print_bigint(&a); // 0x55555555
+	printf("---\n");
+	bigint_from_bytes(&m, prime, 32);
+	bigint_from_bytes(&m256, m256x, 32);
+	bigint_init(&b);
+	b.mess[32] = 1; // 1 << 256
+	bigint_mod(&b, &m);
+	print_bigint(&b);
+	bigint_subtract(&b, &m256);
+	print_bigint(&b); // 0
+	bigint_init(&b);
+	b.mess[32] = 1; // 1 << 256
+	bigint_inc(&b);
+	bigint_mod_accelerated(&b, &m, &m256);
+	print_bigint(&b); // m256 + 1
+	bigint_copy(&b, &m);
+	bigint_mod_accelerated(&b, &m, &m256);
+	print_bigint(&b); // 0
+	bigint_copy(&b, &m);
+	bigint_double(&b);
+	print_bigint(&m);
+	print_bigint(&m256);
+	print_bigint(&b);
+	bigint_mod_accelerated(&b, &m, &m256);
+	print_bigint(&b); // 0
+	bigint_copy(&b, &m);
+	bigint_inc(&b);
+	bigint_mod_accelerated(&b, &m, &m256);
+	print_bigint(&b); // 1
 	return 0;
 }

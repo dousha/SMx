@@ -64,6 +64,17 @@ const uint8_t sysGy[32] = {
 		0x02, 0xdf, 0x32, 0xe5,
 		0x21, 0x39, 0xf0, 0xa0,
 };
+const uint8_t m256[32] = {
+		0x01, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+		0xff, 0xff, 0xff, 0xff,
+		0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00,
+		0x01, 0x00, 0x00, 0x00,
+};
+const uint8_t m256_19[1] = {16};
 
 void print_point(ec_point *point) {
 	if (point->is_infinity) {
@@ -107,6 +118,7 @@ int main() {
 	Q.is_infinity = 0;
 	Q.x = &qx;
 	Q.y = &qy;
+	ec_set_m256(m256_19, 1);
 	ec_point_add(&system, &P, &Q);
 	print_point(&P);
 	bigint_from_value(&px, 10);
@@ -128,8 +140,11 @@ int main() {
 	bigint_from_big_endian_bytes(&n, sysN, 32);
 	bigint_from_big_endian_bytes(&px, sysGx, 32);
 	bigint_from_big_endian_bytes(&py, sysGy, 32);
+	bigint_from_big_endian_bytes(&qx, sysGx, 32);
+	bigint_from_big_endian_bytes(&qy, sysGy, 32);
 	print_point(&P);
-	ec_point_double(&system, &P);
+	ec_set_m256(m256, 32);
+	ec_point_scalar_multiply(&system, &P, system.n);
 	print_point(&P);
 	return 0;
 }

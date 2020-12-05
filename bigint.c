@@ -214,6 +214,50 @@ void bigint_mod(bigint *v, bigint *m) {
 	}
 }
 
+void bigint_mod_accelerated(bigint *v, bigint *m, bigint *m256) {
+	// (a + b) % m == ((a % m) + (b % m)) % m
+	// (a * b) % m == ((a % m) * (b % m)) % m
+	// -> (hi_256 * 2^256 + lo_256) % m == (((hi_256 % m) * (2^256 % m)) % m) + (lo_256 % m)) % m
+	// m256: 2^256 % m
+	uint8_t sign = bigint_is_negative(v);
+	if (sign) {
+		bigint_negate(v);
+	}
+	if (bigint_excerpt_is_zero(v, 256)) {
+		// too small to care
+		if (sign) {
+			bigint_negate(v);
+		}
+		bigint_mod(v, m);
+		return;
+	}
+	if (sign) {
+		bigint_negate(v);
+	}
+	bigint lo;
+	bigint_copy(&lo, v);
+	memset(lo.mess + 32, 0, BIGINT_ACTUAL_SIZE - 32); // lo holds the lower part of the result
+	while (bigint_compare(&lo, m) >= 0) {
+		bigint_subtract(&lo, m);
+	} // lo_256 % m
+	bigint_shift_right_256(v);
+	while (bigint_compare(v, m) >= 0) {
+		bigint_subtract(v, m);
+	} // hi_256 % m
+	bigint_multiply(v, m256); // ((hi_256 % m) * (2_256 % m))
+	if (bigint_compare(v, m) >= 0) {
+		// recursively obtain value, usu 7 max depth (128bytes stack consumption..)
+		bigint_mod_accelerated(v, m, m256);
+	} // ((hi_256 % m) * (2_256 % m)) % m
+	// ^ obtained the hi part modulo, add things up now
+	bigint_add(v, &lo);
+	// ((hi_256 % m) * (2_256 % m)) % m + lo_256 % m
+	while (bigint_compare(v, m) >= 0) {
+		bigint_subtract(v, m);
+	}
+	// ans % m
+}
+
 void bigint_multiply_mod(bigint *a, bigint *b, bigint *m) {
 #ifndef USE_SHARED_BUFFER
 	bigint buf;
@@ -223,6 +267,15 @@ void bigint_multiply_mod(bigint *a, bigint *b, bigint *m) {
 	bigint_mod(a, m);
 	bigint_multiply(a, b);
 	bigint_mod(a, m);
+}
+
+void bigint_multiply_mod_accelerated(bigint *a, bigint *b, bigint *m, bigint *m256) {
+	bigint buf;
+	bigint_copy(&buf, b);
+	bigint_mod_accelerated(&buf, m, m256);
+	bigint_mod_accelerated(a, m, m256);
+	bigint_multiply(a, b);
+	bigint_mod_accelerated(a, m, m256);
 }
 
 void bigint_power_mod(bigint *g, bigint *b, bigint *m) {
@@ -251,6 +304,31 @@ void bigint_power_mod(bigint *g, bigint *b, bigint *m) {
 	bigint_copy(g, &buf);
 }
 
+void bigint_power_mod_accelerated(bigint *g, bigint *b, bigint *m, bigint *m256) {
+#ifndef USE_SHARED_BUFFER
+	bigint buf;
+#endif
+	if (bigint_is_zero(m)) {
+		return;
+	}
+	if (bigint_is_one(m)) {
+		bigint_init(g);
+		return;
+	}
+	bigint_mod_accelerated(g, m, m256);
+	bigint_from_value(&buf, 1);
+	uint16_t offset = 0;
+	while (!bigint_excerpt_is_zero(b, offset)) {
+		if (bigint_test_bit(b, offset)) {
+			bigint_multiply_mod_accelerated(&buf, g, m, m256);
+		}
+		bigint_square(g);
+		bigint_mod_accelerated(g, m, m256);
+		++offset;
+	}
+	bigint_copy(g, &buf);
+}
+
 void bigint_negate(bigint *v) {
 	if (bigint_is_zero(v)) {
 		return;
@@ -263,10 +341,14 @@ void bigint_negate(bigint *v) {
 
 uint8_t bigint_inc(bigint *v) {
 	uint16_t t = 0;
-	uint8_t carry = 0;
+	uint8_t carry = 1;
 	for (uint8_t i = 0; i < BIGINT_ACTUAL_SIZE; i++) {
 		t = v->mess[i];
-		++t;
+		if (carry) {
+			++t;
+		} else {
+			break;
+		}
 		carry = t > 0xffu ? 1 : 0;
 		v->mess[i] = (uint8_t) (t & 0xffu);
 	}
@@ -443,6 +525,25 @@ void bigint_divide_mod_prime(bigint *a, bigint *b, bigint *m) {
 	bigint_multiply_mod(a, &buf, m);
 }
 
+void bigint_divide_mod_prime_accelerated(bigint *a, bigint *b, bigint *m, bigint *m256) {
+#ifndef USE_SHARED_BUFFER
+	bigint buf, buf2;
+#endif
+	if (bigint_is_zero(b) || bigint_is_zero(m)) {
+		return;
+	}
+	if (bigint_is_one(m)) {
+		bigint_init(a);
+		return;
+	}
+	bigint_copy(&buf, b);
+	bigint_copy(&buf2, m);
+	bigint_mod_accelerated(&buf, m, m256);
+	bigint_subtract_u8(&buf2, 2);
+	bigint_power_mod_accelerated(&buf, &buf2, m, m256); // buf is the inverse of b
+	bigint_multiply_mod_accelerated(a, &buf, m, m256);
+}
+
 uint8_t bigint_is_opposite(bigint *a, bigint *b) {
 	if (a == b) {
 		return 0;
@@ -458,7 +559,7 @@ uint8_t bigint_is_opposite(bigint *a, bigint *b) {
 }
 
 uint8_t bigint_double(bigint *v) {
-	return bigint_shift_right(v);
+	return bigint_shift_left(v);
 }
 
 uint8_t bigint_shift_left(bigint *v) {
@@ -499,4 +600,9 @@ void bigint_average(bigint *a, const bigint *b) {
 void bigint_center(bigint *out, const bigint *left, const bigint *right) {
 	bigint_copy(out, left);
 	bigint_average(out, right);
+}
+
+void bigint_shift_right_256(bigint *v) {
+	memcpy(v->mess, v->mess + 32, 32);
+	memset(v->mess + 32, 0, BIGINT_ACTUAL_SIZE - 32);
 }

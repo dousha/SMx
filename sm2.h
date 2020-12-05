@@ -3,6 +3,8 @@
 
 #include "bigint.h"
 
+#define USE_ACCELERATED_ALGORITHM
+
 typedef struct {
 	bigint *x;
 	bigint *y;
@@ -21,6 +23,10 @@ typedef struct {
 	bigint *secret;
 	ec_point *pubkey;
 } ec_keypair;
+
+extern void ec_init(const ec_system *);
+
+extern void ec_set_m256(const uint8_t *, size_t);
 
 extern void ec_point_add(const ec_system *, ec_point *, const ec_point *);
 
